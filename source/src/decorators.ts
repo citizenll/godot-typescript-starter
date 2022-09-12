@@ -1,6 +1,6 @@
 /**
  * Expose as an ECMAClass.
- * An ECMAScript object is created and attached automatically when construct an instance from this class
+ * An ECMAScript object is created and attached automaticly when construct an instance from this class
  */
 export function gdclass<T extends godot.Object>(target: new () => T) {
 	const id = gdclass['internal_class_id'] = gdclass['internal_class_id'] ? gdclass['internal_class_id'] + 1 : 1;
@@ -76,7 +76,7 @@ export function onready<T extends godot.Node>(path?: string | (new () => godot.N
 export function node<T extends godot.Node>(target: T, property: string, descriptor?: any) {
 	const key = `$onready:${property}`;
 	const path_key = `${property} `; // <-- a space at the end
-	descriptor = descriptor || {};
+	descriptor = descriptor || {}; 
 	descriptor.set = function (v) { this[key] = v; };
 	descriptor.get = function () {
 		let v = this[key];

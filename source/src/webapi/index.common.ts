@@ -17,7 +17,6 @@ export function initialize(modules: WebAPIModule[]) {
 		}
 	}
 	registered_modules = modules;
-	console.log('global modules:', Object.keys(window))
 }
 
 export function finalize() {

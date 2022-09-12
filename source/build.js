@@ -13,8 +13,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const production = process.argv.length == 3 && process.argv[2] == '--release';
 
-console.log(production)
-
 const options = {
 	sourceRoot: 'src',
 	outRoot: path.resolve(__dirname, scripts.output),
@@ -119,8 +117,6 @@ async function build_entry(input, output, update = false) {
 }
 
 function clearScreen() {
-	const repeatCount = process.stdout.rows - 2
-	const blank = repeatCount > 0 ? '\n'.repeat(repeatCount) : ''
 	readline.cursorTo(process.stdout, 0, 0)
 	readline.clearScreenDown(process.stdout)
 }
