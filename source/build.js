@@ -11,6 +11,9 @@ import readline from 'readline'
 const scripts = JSON.parse(fs.readFileSync('./build.config.json', 'utf-8'))
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const production = process.argv.length == 3 && process.argv[2] == '--release';
+
+console.log(production)
 
 const options = {
 	sourceRoot: 'src',
@@ -100,6 +103,7 @@ async function build_entry(input, output, update = false) {
 	const outfile = output.replace('src/', '')
 	try {
 		esbuild.buildSync({
+			minify: production,
 			entryPoints: [input],
 			outfile,//remove src dir
 			target: 'esnext',
