@@ -5,6 +5,7 @@
     "MASTERSYNC",
     "onready",
     "outfile",
+    "picocolors",
     "puppetsync",
     "remotesync",
     "runable",

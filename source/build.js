@@ -1,11 +1,16 @@
-const chokidar = require('chokidar');
-const path = require('path');
-const fs = require('fs');
-const esbuild = require('esbuild');
-const colors = require('colors/safe');
-const filesize = require('filesize');
-const { glob } = require('glob');
-const scripts = require('./build.config.json');
+import chokidar from 'chokidar';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+import esbuild from 'esbuild';
+import colors from 'colors';
+import filesize from 'filesize';
+import glob from 'fast-glob';
+import readline from 'readline'
+
+const scripts = JSON.parse(fs.readFileSync('./build.config.json', 'utf-8'))
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const options = {
 	sourceRoot: 'src',
@@ -27,9 +32,10 @@ function update_entries() {
 	patterns = scripts.compile_only || [];
 	scripts.compile_only = [];
 	for (const p of patterns) {
-		const inputs = glob.sync(p);
+		const inputs = glob.sync(p).filter(file => !file.endsWith('.d.ts'));
 		scripts.compile_only = scripts.compile_only.concat(inputs);
 	}
+	scripts.compile_only = Array.from(new Set(scripts.compile_only))
 }
 
 function clean() {
@@ -38,6 +44,8 @@ function clean() {
 
 function watch() {
 	update_entries();
+	let compileCount = 0, startTime = Date.now();
+	let compiled = false, totalCount = scripts.compile_only.length;
 	chokidar.watch(options.sourceRoot).on('all', (event, input) => {
 		if (!fs.existsSync(input) || !fs.statSync(input).isFile()) return;
 		input = normalize_path(input);
@@ -59,7 +67,13 @@ function watch() {
 			} break;
 		}
 		if (output) {
-			build_entry(input, output);
+			build_entry(input, output, compiled);
+			compileCount++;
+			if (!compiled && compileCount >= totalCount) {
+				clearScreen();
+				compiled = true;
+				console.log(colors.green(`Compiled finished `), colors.grey(`[${Date.now() - startTime}ms]`));
+			}
 		}
 	});
 }
@@ -81,8 +95,7 @@ function get_build_target(input) {
 function entry_is_bundle(input) {
 	return scripts.bundles.indexOf(input) != -1;
 }
-const REPLACE_DIR = path.resolve(__dirname, '../').replace(/\\/g, "/");
-async function build_entry(input, output) {
+async function build_entry(input, output, update = false) {
 	const start = Date.now();
 	const outfile = output.replace('src/', '')
 	try {
@@ -93,11 +106,19 @@ async function build_entry(input, output) {
 			format: 'esm',
 			tsconfig: options.tsconfig,
 			sourcemap: true,
-			bundle: entry_is_bundle(input)
+			bundle: entry_is_bundle(input),
 		});
-		// console.log(`[${Date.now() - start}ms]`, colors.green(`Build ${input} ==> ${output.replace(REPLACE_DIR, '')}`), colors.grey(filesize(fs.statSync(outfile).size)));
+		let time = new Date().toLocaleTimeString();
+		console.log(colors.grey(time), colors.green(`[${Date.now() - start}ms]`), colors.grey(`${update ? 'Update' : 'Build'} ${input}`), colors.grey(filesize(fs.statSync(outfile).size)));
 	} catch (error) {
 	}
+}
+
+function clearScreen() {
+	const repeatCount = process.stdout.rows - 2
+	const blank = repeatCount > 0 ? '\n'.repeat(repeatCount) : ''
+	readline.cursorTo(process.stdout, 0, 0)
+	readline.clearScreenDown(process.stdout)
 }
 check_output_dir()
 clean(); watch();

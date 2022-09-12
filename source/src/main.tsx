@@ -1,6 +1,7 @@
 import { node } from "./decorators";
 
 export default class main extends godot.Node2D {
+  //check inspector to set
   @node
   icon: godot.Sprite;
 
