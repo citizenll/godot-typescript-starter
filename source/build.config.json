@@ -1,0 +1,13 @@
+{
+    "output":"../scripts",
+    "bundles": [
+        "src/thirdpart.ts"
+    ],
+    "compile_only": [
+        "src/decorators.ts",
+        "src/**/*.tsx",
+        "src/**/*.ts",
+        "src/**/*.js",
+        "src/**/*.jsx"
+    ]
+}
