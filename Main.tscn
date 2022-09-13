@@ -5,6 +5,8 @@
 
 [node name="Node2D" type="Node2D"]
 script = ExtResource( 2 )
+"label " = NodePath("Label")
+"icon " = NodePath("Icon")
 
 [node name="Icon" type="Sprite" parent="."]
 position = Vector2( 512, 288 )

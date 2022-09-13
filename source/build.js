@@ -108,7 +108,7 @@ async function build_entry(input, output, update = false) {
 			format: 'esm',
 			tsconfig: options.tsconfig,
 			sourcemap: true,
-			bundle: entry_is_bundle(input),
+			bundle: entry_is_bundle(input)
 		});
 		let time = new Date().toLocaleTimeString();
 		console.log(colors.grey(time), colors.green(`[${Date.now() - start}ms]`), colors.grey(`${update ? 'Update' : 'Build'} ${input}`), colors.grey(filesize(fs.statSync(outfile).size)));
