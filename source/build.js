@@ -30,13 +30,13 @@ function update_entries() {
 		const inputs = glob.sync(p);
 		scripts.bundles = scripts.bundles.concat(inputs);
 	}
-	patterns = scripts.compile_only || [];
+	patterns = scripts.compile_pattern || [];
 	scripts.compile_only = [];
 	for (const p of patterns) {
 		const inputs = glob.sync(p).filter(file => !file.endsWith('.d.ts'));
 		scripts.compile_only = scripts.compile_only.concat(inputs);
 	}
-	scripts.compile_only = Array.from(new Set(scripts.compile_only))
+	scripts.compile_only = Array.from(new Set(scripts.compile_only));
 }
 
 function clean() {
@@ -48,6 +48,27 @@ function watch() {
 	let compileCount = 0, startTime = Date.now();
 	let compiled = false, totalCount = scripts.compile_only.length;
 	chokidar.watch(options.sourceRoot).on('all', (event, input) => {
+		let unlink = event == 'unlink' || event == 'unlinkDir';
+		if (unlink) {
+			let isDir = event == 'unlinkDir'
+			let target = isDir ? normalize_path(path.join(options.outRoot, input)) : get_build_target(input);
+			if (!target) return
+			target = target.replace('src/', '')
+			if (!isDir) {
+				let parse = path.parse(target)
+				let prefix = target.replace(parse.base, '')
+				['.jsx', '.jsx.map'].map(s => `${prefix}${parse.name}${s}`).forEach((file) => {
+					fs.rmSync(file, { recursive: true, force: true });
+					console.log(colors.grey("unlink"), colors.grey(`${file}`));
+				})
+			} else {
+				if (!fs.existsSync(target)) return
+				fs.rmSync(target, { recursive: true, force: true });
+				console.log(colors.grey("unlink"), colors.grey(`${target}`));
+			}
+			update_entries();
+			return
+		}
 		if (!fs.existsSync(input) || !fs.statSync(input).isFile()) return;
 		input = normalize_path(input);
 		let output = null;
@@ -55,17 +76,10 @@ function watch() {
 			case 'add':
 				update_entries();
 				output = get_build_target(input);
+				break
 			case 'change':
 				output = get_build_target(input);
 				break;
-			case 'unlink': {
-				const last = get_build_target(input);
-				update_entries();
-				output = get_build_target(input);
-				if (!output && last) {
-					console.log('移除', last);
-				}
-			} break;
 		}
 		if (output) {
 			build_entry(input, output, compiled);
@@ -87,8 +101,11 @@ function check_output_dir() {
 function get_build_target(input) {
 	const matches = input.match(/(\.d)?(\.[t|j]sx?)/);
 	if (!matches) return;
+
 	if (matches[0] === '.d.ts') return;
-	if (scripts.bundles.indexOf(input) == -1 && scripts.compile_only.indexOf(input) == -1) return;
+	let normalized = normalize_path(input)
+	if (scripts.bundles.indexOf(normalized) == -1 && scripts.compile_only.indexOf(normalized) == -1) return;
+
 	const target = path.join(options.outRoot, input).replace('.ts', '.js');
 	return normalize_path(target);
 }
