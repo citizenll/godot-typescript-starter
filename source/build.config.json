@@ -1,9 +1,10 @@
 {
     "output":"../scripts",
+    "cacheDir":"node_modules/.godot",
     "bundles": [
         "src/thirdpart.ts"
     ],
-    "compile_only": [
+    "compile_pattern": [
         "src/decorators.ts",
         "src/**/*.tsx",
         "src/**/*.ts",

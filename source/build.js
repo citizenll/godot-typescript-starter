@@ -7,6 +7,7 @@ import colors from 'colors';
 import filesize from 'filesize';
 import glob from 'fast-glob';
 import readline from 'readline'
+import { createHash } from 'node:crypto'
 
 const scripts = JSON.parse(fs.readFileSync('./build.config.json', 'utf-8'))
 const __filename = fileURLToPath(import.meta.url);
@@ -18,6 +19,7 @@ const options = {
 	outRoot: path.resolve(__dirname, scripts.output),
 	tsconfig: 'tsconfig.json',
 }
+let cachedDepOptimizationMetadata
 
 function normalize_path(path) {
 	return path.replace(/\\/g, '/');
@@ -47,9 +49,19 @@ function watch() {
 	update_entries();
 	let compileCount = 0, startTime = Date.now();
 	let compiled = false, totalCount = scripts.compile_only.length;
+
+	const compileCheck = () => {
+		compileCount++;
+		if (!compiled && compileCount >= totalCount) {
+			clearScreen();
+			compiled = true;
+			console.log(colors.green(`Compiled finished `), colors.grey(`[${Date.now() - startTime}ms]`));
+		}
+	}
 	chokidar.watch(options.sourceRoot).on('all', (event, input) => {
 		let unlink = event == 'unlink' || event == 'unlinkDir';
 		if (unlink) {
+
 			let isDir = event == 'unlinkDir'
 			let target = isDir ? normalize_path(path.join(options.outRoot, input)) : get_build_target(input);
 			if (!target) return
@@ -81,15 +93,21 @@ function watch() {
 				output = get_build_target(input);
 				break;
 		}
-		if (output) {
-			build_entry(input, output, compiled);
-			compileCount++;
-			if (!compiled && compileCount >= totalCount) {
-				clearScreen();
-				compiled = true;
-				console.log(colors.green(`Compiled finished `), colors.grey(`[${Date.now() - startTime}ms]`));
+		let text = fs.readFileSync(input, 'utf-8');
+		let hash = getHash(text), dstHash;
+		if (cachedDepOptimizationMetadata.depInfoMap.get(input)) {
+			dstHash = cachedDepOptimizationMetadata.depInfoMap.get(input);
+			if (hash == dstHash) {
+				return compileCheck()
 			}
 		}
+		dstHash = hash
+		if (output) {
+			build_entry(input, output, compiled);
+			addOptimizedDepInfo(cachedDepOptimizationMetadata, 'optimized', { file: input, fileHash: dstHash })
+			compileCheck()
+		}
+		debounceWriteCatch()
 	});
 }
 
@@ -127,6 +145,7 @@ async function build_entry(input, output, update = false) {
 			sourcemap: true,
 			bundle: entry_is_bundle(input)
 		});
+
 		let time = new Date().toLocaleTimeString();
 		console.log(colors.grey(time), colors.green(`[${Date.now() - start}ms]`), colors.grey(`${update ? 'Update' : 'Build'} ${input}`), colors.grey(filesize(fs.statSync(outfile).size)));
 	} catch (error) {
@@ -138,4 +157,83 @@ function clearScreen() {
 	readline.clearScreenDown(process.stdout)
 }
 check_output_dir()
-clean(); watch();
+// clean(); 
+watch();
+
+export function getHash(text) {
+	return createHash('sha256').update(text).digest('hex').substring(0, 8)
+}
+
+function addOptimizedDepInfo(metadata, type, depInfo) {
+	metadata[type].push(depInfo);
+	metadata.depInfoMap.set(depInfo.file, depInfo.fileHash)
+	return depInfo
+}
+
+function initDepsOptimizerMetadata() {
+	return {
+		optimized: [],//{file:str,fileHash:str}
+		depInfoMap: new Map,
+		chunks: {},
+	}
+}
+
+function loadCachedDepOptimizationMetadata() {
+	let cachedMetadata = initDepsOptimizerMetadata()
+	const cachedMetadataPath = path.join(scripts.cacheDir, '_metadata.json')
+	if (fs.existsSync(cachedMetadataPath)) {
+		cachedMetadata = JSON.parse(fs.readFileSync(cachedMetadataPath, 'utf-8'));
+		cachedMetadata.depInfoMap = new Map;
+		cachedMetadata.optimized.forEach(item => {
+			cachedMetadata.depInfoMap.set(item.file, item.fileHash)
+		})
+	}
+	return cachedMetadata
+}
+
+export function emptyDir(dir, skip) {
+	for (const file of fs.readdirSync(dir)) {
+		if (skip && skip?.includes(file)) {
+			continue
+		}
+		fs.rmSync(path.resolve(dir, file), { recursive: true, force: true })
+	}
+}
+
+function runOptimizer() {
+	let processingCacheDir = path.normalize(scripts.cacheDir);
+	if (!fs.existsSync(processingCacheDir)) {
+		fs.mkdirSync(processingCacheDir, { recursive: true })
+	}
+	cachedDepOptimizationMetadata = loadCachedDepOptimizationMetadata();
+}
+export function writeFile(
+	filename,
+	content
+) {
+	const dir = path.dirname(filename)
+	if (!fs.existsSync(dir)) {
+		fs.mkdirSync(dir, { recursive: true })
+	}
+	fs.writeFileSync(filename, content)
+}
+function debounce(fn, timeout = 1000) {
+	let timer;
+	return () => {
+		if (timer) clearTimeout(timer)
+		setTimeout(() => {
+			fn(); timer = void 0;
+		}, timeout)
+	}
+}
+const debounceWriteCatch = debounce(() => {
+	let deps = [];
+	cachedDepOptimizationMetadata.depInfoMap.forEach((fileHash, file) => {
+		deps.push({ file, fileHash })
+	});
+	const cachedMetadataPath = path.join(scripts.cacheDir, '_metadata.json')
+	let content = JSON.stringify({ optimized: deps });
+	writeFile(cachedMetadataPath, content)
+})
+
+runOptimizer()
