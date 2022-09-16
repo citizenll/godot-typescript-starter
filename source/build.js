@@ -67,9 +67,10 @@ function watch() {
 			if (!target) return
 			target = target.replace('src/', '')
 			if (!isDir) {
-				let parse = path.parse(target)
-				let prefix = target.replace(parse.base, '')
-				['.jsx', '.jsx.map'].map(s => `${prefix}${parse.name}${s}`).forEach((file) => {
+				let parse = path.parse(target);
+				let prefix = target.replace(parse.base, '');
+				let isJs = parse.ext == '.js';
+				[`.js${isJs ? '' : ''}`, `.js${isJs ? '' : ''}.map`].map(s => `${prefix}${parse.name}${s}`).forEach((file) => {
 					fs.rmSync(file, { recursive: true, force: true });
 					console.log(colors.grey("unlink"), colors.grey(`${file}`));
 				})
@@ -111,11 +112,6 @@ function watch() {
 	});
 }
 
-function check_output_dir() {
-	if (!fs.existsSync(options.outRoot)) {
-		fs.mkdirSync(options.outRoot)
-	}
-}
 function get_build_target(input) {
 	const matches = input.match(/(\.d)?(\.[t|j]sx?)/);
 	if (!matches) return;
@@ -156,9 +152,6 @@ function clearScreen() {
 	readline.cursorTo(process.stdout, 0, 0)
 	readline.clearScreenDown(process.stdout)
 }
-check_output_dir()
-// clean(); 
-watch();
 
 export function getHash(text) {
 	return createHash('sha256').update(text).digest('hex').substring(0, 8)
@@ -190,7 +183,14 @@ function loadCachedDepOptimizationMetadata() {
 	}
 	return cachedMetadata
 }
-
+function check_output_dir() {
+	if (!fs.existsSync(options.outRoot)) {
+		fs.mkdirSync(options.outRoot);
+		//remove cached when scripts dir not exist
+		let processingCacheDir = path.normalize(scripts.cacheDir);
+		emptyDir(processingCacheDir)
+	}
+}
 export function emptyDir(dir, skip) {
 	for (const file of fs.readdirSync(dir)) {
 		if (skip && skip?.includes(file)) {
@@ -203,6 +203,7 @@ export function emptyDir(dir, skip) {
 function runOptimizer() {
 	let processingCacheDir = path.normalize(scripts.cacheDir);
 	if (!fs.existsSync(processingCacheDir)) {
+		clean()
 		fs.mkdirSync(processingCacheDir, { recursive: true })
 	}
 	cachedDepOptimizationMetadata = loadCachedDepOptimizationMetadata();
@@ -236,4 +237,6 @@ const debounceWriteCatch = debounce(() => {
 	writeFile(cachedMetadataPath, content)
 })
 
+check_output_dir()
 runOptimizer()
+watch();
